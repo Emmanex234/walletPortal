@@ -91,21 +91,19 @@
       modal.open();
     });
 
-    // FUNCTION TO DIRECTLY FETCH BALANCE VIA ETHERS.JS FROM BLOCKCHAIN
+    // FUNCTION TO DIRECTLY FETCH BALANCE VIA PUBLIC RPC
     async function fetchRealtimeBalance(userAddress) {
       try {
         walletBalanceDisplay.textContent = "Fetching...";
         
-        const providers = modal.getProviders();
-        const walletProvider = providers['eip155'];
-        
-        if (!walletProvider) return;
-
-        const ethersProvider = new ethers.BrowserProvider(walletProvider);
+        // Use a public Ethereum Mainnet endpoint. 
+        // This ignores the wallet's internal restrictions and checks the public ledger directly.
+        const publicRpcUrl = "https://cloudflare-eth.com";
+        const readProvider = new window.ethers.JsonRpcProvider(publicRpcUrl);
         
         // Query balance straight from the chain RPC via Ethers
-        const balanceWei = await ethersProvider.getBalance(userAddress);
-        const balanceEth = ethers.formatEther(balanceWei);
+        const balanceWei = await readProvider.getBalance(userAddress);
+        const balanceEth = window.ethers.formatEther(balanceWei);
         
         // Format to a clean 4 decimal places string
         walletBalanceDisplay.textContent = `${parseFloat(balanceEth).toFixed(4)} ETH`;
