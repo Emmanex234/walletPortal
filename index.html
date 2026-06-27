@@ -10,7 +10,7 @@
 
   <div class="max-w-md w-full bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-700 text-center mx-4">
     <h2 class="text-2xl font-bold mb-2">Secure Gateway</h2>
-    <p class="text-sm text-slate-400 mb-8">Connect your wallet to view your balance and manage transaction payloads.</p>
+    <p class="text-sm text-slate-400 mb-8">Connect your wallet to review your balance and manage transaction payloads.</p>
 
     <!-- CUSTOM WALLET CONNECTION BUTTON -->
     <div id="btn-container" class="flex justify-center mb-6">
@@ -27,11 +27,12 @@
         <!-- DISPLAYING THE DETECTED BALANCE -->
         <div class="flex justify-between items-center mt-2 border-b border-slate-700/50 pb-2 mb-2">
           <span class="text-slate-300 font-medium">Detected Balance:</span>
-          <span id="wallet-balance-display" class="text-xl font-bold text-white">0.00 --</span>
+          <span id="wallet-balance-display" class="text-xl font-bold text-white">Fetching...</span>
         </div>
         
         <div class="mt-2 text-xs text-slate-400 truncate">
-          <span class="font-medium text-slate-300">Connected To:</span> 0x742d35Cc6634C0532925a3b844Bc454e4438f44e
+          <span class="font-medium text-slate-300">Connected Address:</span> 
+          <span id="wallet-address-display" class="text-slate-200 font-mono">0x...</span>
         </div>
       </div>
 
@@ -80,6 +81,7 @@
     const customConnectBtn = document.getElementById('custom-connect-btn');
     const actionArea = document.getElementById('action-area');
     const walletBalanceDisplay = document.getElementById('wallet-balance-display');
+    const walletAddressDisplay = document.getElementById('wallet-address-display');
     const txAmountInput = document.getElementById('tx-amount-input');
     const sendTxBtn = document.getElementById('send-tx-btn');
     const statusMessage = document.getElementById('status-message');
@@ -89,24 +91,44 @@
       modal.open();
     });
 
-    // LISTEN FOR CONNECTION CHANGES AND ACCOUNT DATA
+    // FUNCTION TO DIRECTLY FETCH BALANCE VIA ETHERS.JS FROM BLOCKCHAIN
+    async function fetchRealtimeBalance(userAddress) {
+      try {
+        walletBalanceDisplay.textContent = "Fetching...";
+        
+        const providers = modal.getProviders();
+        const walletProvider = providers['eip155'];
+        
+        if (!walletProvider) return;
+
+        const ethersProvider = new ethers.BrowserProvider(walletProvider);
+        
+        // Query balance straight from the chain RPC via Ethers
+        const balanceWei = await ethersProvider.getBalance(userAddress);
+        const balanceEth = ethers.formatEther(balanceWei);
+        
+        // Format to a clean 4 decimal places string
+        walletBalanceDisplay.textContent = `${parseFloat(balanceEth).toFixed(4)} ETH`;
+      } catch (err) {
+        console.error("Balance fetch error:", err);
+        walletBalanceDisplay.textContent = "Error loading balance";
+      }
+    }
+
+    // LISTEN FOR CONNECTION CHANGES
     modal.subscribeAccount(state => {
-      if (state.isConnected) {
+      if (state.isConnected && state.address) {
         customConnectBtn.textContent = "Wallet Connected ✅";
         customConnectBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
         customConnectBtn.classList.add('bg-slate-700', 'cursor-not-allowed', 'pointer-events-none');
         
-        // Dynamic Balance Reading: Read balance text if available from the state object
-        if (state.balance) {
-          // Truncate to 4 decimal places for clean UI rendering
-          const rawBalance = parseFloat(state.balance);
-          const formattedBalance = isNaN(rawBalance) ? state.balance : rawBalance.toFixed(4);
-          walletBalanceDisplay.textContent = `${formattedBalance} ${state.balanceSymbol || 'ETH'}`;
-        } else {
-          walletBalanceDisplay.textContent = "Connected (Fetching...)";
-        }
+        // Set public address display text
+        walletAddressDisplay.textContent = state.address;
         
         actionArea.classList.remove('hidden');
+
+        // Force a real-time RPC blockchain query for the balance
+        fetchRealtimeBalance(state.address);
       } else {
         customConnectBtn.textContent = "Connect Wallet";
         customConnectBtn.classList.remove('bg-slate-700', 'cursor-not-allowed', 'pointer-events-none');
@@ -145,7 +167,7 @@
 
         const txPayload = {
           to: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e", 
-          value: ethers.parseEther(inputAmount) // Converts user's specific input string to Wei               
+          value: ethers.parseEther(inputAmount)               
         };
 
         const txResponse = await signer.sendTransaction(txPayload);
@@ -157,6 +179,9 @@
         
         statusMessage.textContent = `Success! Tx Hash: ${receipt.hash.substring(0, 10)}...`;
         statusMessage.className = "text-xs text-emerald-400 mt-4 text-center";
+
+        // Refresh balance after transaction finishes successfully
+        fetchRealtimeBalance(await signer.getAddress());
 
       } catch (error) {
         console.error(error);
