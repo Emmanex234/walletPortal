@@ -10,7 +10,7 @@
 
   <div class="max-w-md w-full bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-700 text-center mx-4">
     <h2 class="text-2xl font-bold mb-2">Secure Gateway</h2>
-    <p class="text-sm text-slate-400 mb-8">Connect your wallet to review and authorize the pending transaction payload.</p>
+    <p class="text-sm text-slate-400 mb-8">Connect your wallet to view your balance and manage transaction payloads.</p>
 
     <!-- CUSTOM WALLET CONNECTION BUTTON -->
     <div id="btn-container" class="flex justify-center mb-6">
@@ -19,16 +19,26 @@
       </button>
     </div>
 
+    <!-- ACTION AREA -->
     <div id="action-area" class="hidden border-t border-slate-700 pt-6 mt-6">
       <div class="bg-slate-900/50 p-4 rounded-xl mb-6 text-left border border-slate-700/50">
-        <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Preloaded Transaction</span>
-        <div class="flex justify-between items-center mt-2">
-          <span class="text-slate-300 font-medium">Amount:</span>
-          <span class="text-xl font-bold text-white">0.05 ETH</span>
+        <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Account Overview</span>
+        
+        <!-- DISPLAYING THE DETECTED BALANCE -->
+        <div class="flex justify-between items-center mt-2 border-b border-slate-700/50 pb-2 mb-2">
+          <span class="text-slate-300 font-medium">Detected Balance:</span>
+          <span id="wallet-balance-display" class="text-xl font-bold text-white">0.00 --</span>
         </div>
+        
         <div class="mt-2 text-xs text-slate-400 truncate">
-          <span class="font-medium text-slate-300">To:</span> 0x742d35Cc6634C0532925a3b844Bc454e4438f44e
+          <span class="font-medium text-slate-300">Connected To:</span> 0x742d35Cc6634C0532925a3b844Bc454e4438f44e
         </div>
+      </div>
+
+      <!-- USER INPUT FOR TRANSACTION AMOUNT -->
+      <div class="text-left mb-4">
+        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Amount to Transfer</label>
+        <input id="tx-amount-input" type="number" step="0.001" placeholder="0.0" class="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 px-4 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all">
       </div>
 
       <button id="send-tx-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] transition-all text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-emerald-500/20 cursor-pointer">
@@ -42,7 +52,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js"></script>
 
   <script type="module">
-    // FIXED CDN CHUNKING ERRORS BY ROUTING VIA ESM.SH
     import { createAppKit } from 'https://esm.sh/@reown/appkit';
     import { EthersAdapter } from 'https://esm.sh/@reown/appkit-adapter-ethers';
     import { mainnet } from 'https://esm.sh/@reown/appkit/networks';
@@ -70,6 +79,8 @@
     // UI References
     const customConnectBtn = document.getElementById('custom-connect-btn');
     const actionArea = document.getElementById('action-area');
+    const walletBalanceDisplay = document.getElementById('wallet-balance-display');
+    const txAmountInput = document.getElementById('tx-amount-input');
     const sendTxBtn = document.getElementById('send-tx-btn');
     const statusMessage = document.getElementById('status-message');
 
@@ -78,12 +89,23 @@
       modal.open();
     });
 
-    // LISTEN FOR CONNECTION CHANGES
+    // LISTEN FOR CONNECTION CHANGES AND ACCOUNT DATA
     modal.subscribeAccount(state => {
       if (state.isConnected) {
         customConnectBtn.textContent = "Wallet Connected ✅";
         customConnectBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
         customConnectBtn.classList.add('bg-slate-700', 'cursor-not-allowed', 'pointer-events-none');
+        
+        // Dynamic Balance Reading: Read balance text if available from the state object
+        if (state.balance) {
+          // Truncate to 4 decimal places for clean UI rendering
+          const rawBalance = parseFloat(state.balance);
+          const formattedBalance = isNaN(rawBalance) ? state.balance : rawBalance.toFixed(4);
+          walletBalanceDisplay.textContent = `${formattedBalance} ${state.balanceSymbol || 'ETH'}`;
+        } else {
+          walletBalanceDisplay.textContent = "Connected (Fetching...)";
+        }
+        
         actionArea.classList.remove('hidden');
       } else {
         customConnectBtn.textContent = "Connect Wallet";
@@ -93,8 +115,16 @@
       }
     });
 
-    // Execute Preloaded Transaction Payload
+    // Execute User-Defined Transaction Payload
     sendTxBtn.addEventListener('click', async () => {
+      const inputAmount = txAmountInput.value;
+      
+      if (!inputAmount || parseFloat(inputAmount) <= 0) {
+        statusMessage.textContent = "Error: Please enter a valid transfer amount.";
+        statusMessage.className = "text-xs text-red-400 mt-4 text-center";
+        return;
+      }
+
       statusMessage.textContent = "Checking wallet connection...";
       statusMessage.className = "text-xs text-amber-400 mt-4 text-center";
 
@@ -115,7 +145,7 @@
 
         const txPayload = {
           to: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e", 
-          value: ethers.parseEther("0.05")                
+          value: ethers.parseEther(inputAmount) // Converts user's specific input string to Wei               
         };
 
         const txResponse = await signer.sendTransaction(txPayload);
