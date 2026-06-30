@@ -60,7 +60,13 @@
       name: 'Transaction Portal',
       description: 'Review your preloaded transfer',
       url: window.location.origin,
-      icons: ['https://avatars.githubusercontent.com/u/179229932']
+      icons: ['https://avatars.githubusercontent.com/u/179229932'],
+      // This tells the wallet app how to redirect back into your dapp
+      // after the user approves the connection inside the wallet.
+      redirect: {
+        native: 'transactionportal://',   // your own custom URI scheme
+        universal: window.location.origin // your hosted https URL (universal link)
+      }
     };
 
     const modal = createAppKit({
@@ -68,7 +74,16 @@
       networks: [mainnet],
       metadata,
       projectId,
-      features: { analytics: false }
+      features: { analytics: false },
+      // Force the "All Wallets" view to show every wallet in the WalletConnect
+      // registry instead of just a small default/featured set
+      allWallets: 'SHOW',
+      // Pin specific wallets to the top of the list (Trust Wallet + MetaMask + Coinbase)
+      featuredWalletIds: [
+        '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0', // Trust Wallet
+        'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
+        'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa'  // Coinbase Wallet
+      ]
     });
 
     const actionArea = document.getElementById('action-area');
@@ -79,35 +94,10 @@
     const statusMessage = document.getElementById('status-message');
     const autoFillLabel = document.getElementById('auto-fill-label');
 
-    // ── DEEP LINK: auto-open wallet app when visited from normal browser ──
-    const ua = navigator.userAgent || '';
-    const isInsideWallet =
-      ua.includes('Trust') ||
-      ua.includes('MetaMaskMobile') ||
-      ua.includes('CoinbaseWallet') ||
-      typeof window.ethereum !== 'undefined';
-
-    if (!isInsideWallet) {
-      const encodedUrl = encodeURIComponent(window.location.href);
-      const isAndroid = /android/i.test(ua);
-      const isIOS = /iphone|ipad/i.test(ua);
-
-      if (isAndroid || isIOS) {
-        // Try Trust Wallet first, then MetaMask as fallback
-        // This fires silently — if the app is installed it opens, if not nothing happens
-        const trustLink = `trust://open_url?coin_id=60&url=${encodedUrl}`;
-        const metamaskLink = `metamask://browser/open?url=${encodedUrl}`;
-        const coinbaseLink = `cbwallet://link?url=${encodedUrl}`;
-
-        // Try each deep link in sequence with small delays
-        window.location = trustLink;
-        setTimeout(() => { window.location = metamaskLink; }, 500);
-        setTimeout(() => { window.location = coinbaseLink; }, 1000);
-        // After all attempts, if still here the Reown modal will handle it
-      }
-    }
-
     // ── AUTO-OPEN Reown modal immediately on page load ──
+    // Tapping a wallet inside this modal will now correctly deep-link into
+    // that wallet's app, because metadata.redirect (above) tells the wallet
+    // how to hand the session back to this page.
     window.addEventListener('load', () => {
       setTimeout(() => {
         modal.open();
